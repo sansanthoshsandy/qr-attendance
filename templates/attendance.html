@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Live Attendance</title>
+
+<style>
+body{
+    font-family: Arial;
+    background:#f4f4f4;
+    padding:20px;
+}
+
+h2{
+    text-align:center;
+}
+
+table{
+    border-collapse: collapse;
+    width:100%;
+    background:white;
+}
+
+th, td{
+    border:1px solid #ccc;
+    padding:10px;
+    text-align:center;
+}
+
+th{
+    background:#222;
+    color:white;
+}
+</style>
+
+</head>
+<body>
+
+<h2>Live Attendance Dashboard</h2>
+
+<table>
+<tr>
+    <th>Employee ID</th>
+    <th>Name</th>
+    <th>Date</th>
+    <th>IN Time</th>
+    <th>OUT Time</th>
+</tr>
+
+{% if records %}
+
+    {% for r in records %}
+    <tr>
+        <td>{{ r[0] }}</td>
+        <td>{{ r[1] }}</td>
+        <td>{{ r[2] }}</td>
+        <td>{{ r[3] }}</td>
+        <td>{{ r[4] }}</td>
+    </tr>
+    {% endfor %}
+
+{% else %}
+
+<tr>
+<td colspan="5">No attendance records found</td>
+</tr>
+
+{% endif %}
+
+</table>
+
+</body>
+</html>

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WFH Attendance</title>
+    <style>
+        body { background:#f2f2f2; font-family:Arial; text-align:center; padding-top:80px; }
+        .box { background:white; width:350px; margin:auto; padding:30px; border-radius:10px; }
+        input,button { width:100%; padding:10px; margin-top:10px; font-size:16px; }
+        .msg { margin-top:15px; font-weight:bold; }
+    </style>
+</head>
+<body>
+
+<div class="box">
+    <h2>WFH Attendance</h2>
+    <input id="empId" placeholder="Employee ID (EMP101)">
+    <button onclick="mark('IN')">Mark IN</button>
+    <button onclick="mark('OUT')">Mark OUT</button>
+    <div class="msg" id="msg"></div>
+</div>
+
+<script>
+function mark(type){
+    fetch("/wfh_mark",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            employee_id:document.getElementById("empId").value,
+            type:type
+        })
+    })
+    .then(r=>r.json())
+    .then(d=>document.getElementById("msg").innerText=d.message);
+}
+</script>
+
+</body>
+</html>

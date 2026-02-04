@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Office Attendance</title>
+
+    <!-- QR Scanner Library -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+
+    <style>
+        body {
+            background:#111;
+            color:white;
+            text-align:center;
+            font-family:Arial;
+        }
+
+        #reader {
+            width:420px;
+            margin:auto;
+            margin-top:20px;
+        }
+
+        #result {
+            margin-top:25px;
+            font-size:22px;
+        }
+
+        .ok {
+            color:#00ff88;
+            font-weight:bold;
+        }
+
+        .err {
+            color:#ff5555;
+            font-weight:bold;
+        }
+    </style>
+</head>
+
+<body>
+
+<h2>Show Your QR Code</h2>
+
+<div id="reader"></div>
+<div id="result"></div>
+
+<!-- Sounds -->
+<audio id="successSound" src="/static/success.mp3"></audio>
+<audio id="errorSound" src="/static/error.mp3"></audio>
+
+<script>
+
+const resultBox = document.getElementById("result");
+const okSound = document.getElementById("successSound");
+const errSound = document.getElementById("errorSound");
+
+let scanningAllowed = true;   // cooldown lock
+
+function onScanSuccess(qrText) {
+
+    if (!scanningAllowed) return;   // block fast repeat
+
+    scanningAllowed = false;
+
+    fetch("/mark", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employee_id: qrText })
+    })
+    .then(res => res.json())
+    .then(data => {
+
+        if (data.error) {
+            errSound.play();
+            resultBox.innerHTML = `<div class="err">${data.error}</div>`;
+        } 
+        else {
+            okSound.play();
+            resultBox.innerHTML = `
+                <div class="ok">
+                    ${data.name}<br>
+                    ${data.role}<br>
+                    ${data.status}
+                </div>`;
+        }
+
+        // ⏱️ cooldown 8 seconds
+        setTimeout(() => {
+            resultBox.innerHTML = "";
+            scanningAllowed = true;
+        }, 8000);
+
+    })
+    .catch(err => {
+        console.log("Error:", err);
+        scanningAllowed = true;
+    });
+}
+
+
+// Start camera safely
+const html5QrCode = new Html5Qrcode("reader");
+
+html5QrCode.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: 260 },
+    onScanSuccess
+).catch(err => {
+    console.log("Camera error:", err);
+});
+
+</script>
+
+</body>
+</html>
