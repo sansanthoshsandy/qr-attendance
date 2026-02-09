@@ -11,6 +11,10 @@ app = Flask(__name__)
 # ================= DATABASE =================
 DB_PATH = "attendance.db"
 
+# ================= TIME (IST) =================
+def ist_time():
+    return datetime.utcnow() + timedelta(hours=5, minutes=30)
+
 # ================= TWILIO ==================
 TWILIO_SID = os.getenv("TWILIO_SID")
 TWILIO_AUTH = os.getenv("TWILIO_AUTH")
@@ -21,10 +25,6 @@ HR_NUMBER = "whatsapp:+918870350032"
 BASE_URL = "https://qr-attendance-2-robt.onrender.com"
 LIVE_LINK = BASE_URL + "/attendance"
 PDF_LINK = BASE_URL + "/daily_pdf"
-
-# ================= TIME (IST) =================
-def ist_time():
-    return datetime.utcnow() + timedelta(hours=5, minutes=30)
 
 # ================= DB INIT =================
 def init_db():
@@ -60,7 +60,7 @@ def init_db():
 
 init_db()
 
-# ================= ATTENDANCE =================
+# ================= ATTENDANCE CORE =================
 def mark_attendance(emp_id):
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
@@ -71,7 +71,7 @@ def mark_attendance(emp_id):
 
     if not emp:
         conn.close()
-        return None, None, "Employee not registered"
+        return None, None, "❌ Employee not registered"
 
     name, role = emp
     IST = ist_time()
@@ -79,7 +79,8 @@ def mark_attendance(emp_id):
     now = IST.strftime("%H:%M:%S")
 
     cur.execute("""
-        SELECT id, in_time, out_time FROM attendance
+        SELECT id, in_time, out_time
+        FROM attendance
         WHERE employee_id=? AND date=?
     """, (emp_id, today))
 
@@ -88,17 +89,18 @@ def mark_attendance(emp_id):
     if row is None:
         cur.execute("""
             INSERT INTO attendance(employee_id, date, in_time)
-            VALUES(?,?,?)
+            VALUES (?, ?, ?)
         """, (emp_id, today, now))
-        status = "IN marked"
+        status = "✅ IN marked"
 
     elif row[1] and row[2] is None:
         cur.execute("""
             UPDATE attendance SET out_time=? WHERE id=?
         """, (now, row[0]))
-        status = "OUT marked"
+        status = "✅ OUT marked"
+
     else:
-        status = "Attendance completed"
+        status = "⚠ Attendance already completed"
 
     conn.commit()
     conn.close()
@@ -131,16 +133,72 @@ def attendance_view():
     conn.close()
     return render_template("attendance.html", records=rows)
 
+# ================= WFH =================
+@app.route("/wfh")
+def wfh():
+    return render_template("wfh.html")
+
+@app.route("/wfh_mark", methods=["POST"])
+def wfh_mark():
+    emp_id = request.json.get("employee_id", "").upper().strip()
+    action = request.json.get("type")  # IN / OUT
+
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute("SELECT name FROM employees WHERE employee_id=?", (emp_id,))
+    emp = cur.fetchone()
+
+    if not emp:
+        conn.close()
+        return jsonify({"message": "❌ Employee not registered"})
+
+    IST = ist_time()
+    today = IST.strftime("%Y-%m-%d")
+    now = IST.strftime("%H:%M:%S")
+
+    cur.execute("""
+        SELECT id, in_time, out_time
+        FROM attendance
+        WHERE employee_id=? AND date=?
+    """, (emp_id, today))
+
+    row = cur.fetchone()
+
+    if action == "IN" and row is None:
+        cur.execute("""
+            INSERT INTO attendance(employee_id, date, in_time)
+            VALUES (?, ?, ?)
+        """, (emp_id, today, now))
+        msg = "🏠 WFH IN marked"
+
+    elif action == "OUT" and row and row[2] is None:
+        cur.execute("""
+            UPDATE attendance SET out_time=?
+            WHERE id=?
+        """, (now, row[0]))
+        msg = "🏠 WFH OUT marked"
+
+    else:
+        msg = "⚠ Invalid action or already completed"
+
+    conn.commit()
+    conn.close()
+    return jsonify({"message": msg})
+
 # ================= PDF =================
 def generate_pdf():
+    IST = ist_time()
+    today = IST.strftime("%Y-%m-%d")
+
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute("""
         SELECT a.employee_id, e.name, a.in_time, a.out_time
         FROM attendance a
         JOIN employees e ON a.employee_id=e.employee_id
-        WHERE a.date = DATE('now')
-    """)
+        WHERE a.date=?
+    """, (today,))
     rows = cur.fetchall()
     conn.close()
 
@@ -171,10 +229,13 @@ def daily_pdf():
 
 # ================= WHATSAPP =================
 def send_live_link():
+    if not TWILIO_SID or not TWILIO_AUTH:
+        raise Exception("Twilio credentials missing")
+
     Client(TWILIO_SID, TWILIO_AUTH).messages.create(
         from_=TWILIO_WHATSAPP_NUMBER,
         to=HR_NUMBER,
-        body=f"Good Morning HR 👋\nLive Attendance:\n{LIVE_LINK}"
+        body=f"🌅 Good Morning HR\nLive Attendance Link:\n{LIVE_LINK}"
     )
 
 def send_pdf():
@@ -182,7 +243,7 @@ def send_pdf():
     Client(TWILIO_SID, TWILIO_AUTH).messages.create(
         from_=TWILIO_WHATSAPP_NUMBER,
         to=HR_NUMBER,
-        body="Today's Attendance Summary PDF 📄",
+        body="📄 Today's Attendance Summary",
         media_url=[PDF_LINK]
     )
 
@@ -190,12 +251,12 @@ def send_pdf():
 @app.route("/cron/send_link")
 def cron_send_link():
     send_live_link()
-    return "Morning WhatsApp link sent", 200
+    return "OK", 200
 
 @app.route("/cron/send_pdf")
 def cron_send_pdf():
     send_pdf()
-    return "Evening PDF sent", 200
+    return "OK", 200
 
 # ================= RUN =================
 if __name__ == "__main__":
