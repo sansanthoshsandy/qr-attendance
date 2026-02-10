@@ -261,6 +261,9 @@ def cron_send_pdf():
         return "OK", 200
     except:
         return "OK", 200
+@app.route("/monthly_ui")
+def monthly_ui():
+    return render_template("monthly.html")
 
 # ================= MONTHLY REPORT =================
 @app.route("/monthly_report")
